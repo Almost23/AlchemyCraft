@@ -1,0 +1,13 @@
+name: Alchemy Craft
+main: HanzVu.AlchemyCraft
+version: 0.1.5
+
+commands:
+  still:
+    description: Creates a still for breaking down materials into the 5 basic elements
+    usage: /still
+  
+  furnace:
+    description: Creates a furnace for transmutation of the 5 basic elements
+    usage: /furnace
+    
