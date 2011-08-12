@@ -3,6 +3,7 @@ package HanzVu;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Random;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Dispenser;
 import org.bukkit.inventory.ItemStack;
@@ -14,7 +15,7 @@ import org.bukkit.inventory.ItemStack;
 
 /* TODO:
  * [ ]Rewrite distilling code to have independent leveling
- * [ ]Figure out fair exchangerate
+ * [ ]Figure out fair exchange rate
  * 
  */
 
@@ -74,8 +75,8 @@ public class acRecipes {
     
      Random generator = new Random();
     
-    int level0 = 0;
-    int level1 = 4;
+    int level0 = -1; //Allows me to put number of entries for each level below without compromising 0 indexing.
+    int level1 = level0+4;
     int level2 = level1+3;
     int level3 = level2+3;
     int level4 = level3+3;
@@ -123,7 +124,10 @@ public class acRecipes {
         recipes.addAll(Arrays.asList(temp));
     }
     
-    public int Transmute(int level, Dispenser furnace){
+    public int Transmute(String pname, Dispenser furnace){
+   
+        int level = plugin.leveling.playerInfo.get(pname)[0];
+        
         //Level 0 can't make stuff!
         if(level ==0) return -2;
         
@@ -188,8 +192,8 @@ public class acRecipes {
         
         //Dispense an item stack:
         //If there are no possible recipes using the items they gave, return null
-        //If there is one possible recipe, return that recipe
-        //If there are multiple recipes, return one at random.
+        //If there is one possible recipe, dispense that recipe
+        //If there are multiple recipes, dispense one at random.
         ItemStack t = null;
         switch(potential.size()){
             case 0: return -2;
@@ -206,52 +210,53 @@ public class acRecipes {
         return -1;
     }
     
-    public int Distill(int level, Dispenser still){
-        AlchemyCraft.log.info("Distilling");
+    public int Distill(String pname, Dispenser still){
+        int level = plugin.leveling.playerInfo.get(pname)[0];
         
         //level 0 can't distill
-        if(level ==0) return -2;
-        
-        //Find the position of the block in the dispenser
-        //0  1  2
-        //3  4  5
-        //6  7  8
-        int item = -1;
-        for(int q =0; q<9; q++){
-            if(still.getInventory().getContents()[q] != null) item =q;
-        }
-        //If item <0, the dispenser is empty
-        if(item <0) return -2;
-        
-        ItemStack[] composition = new ItemStack[5];
-        for(int i=0; i<levels[level]; i++){
-                if(recipes.get(i)[5] == still.getInventory().getContents()[item].getTypeId()){
-                    AlchemyCraft.log.info("Found the object!");
-                    composition[0] = new ItemStack(348,recipes.get(i)[0]);    //aether
-                    composition[1] = new ItemStack(51,recipes.get(i)[1]);     //fire
-                    composition[2] = new ItemStack(8,recipes.get(i)[2]);      //water
-                    composition[3] = new ItemStack(3,recipes.get(i)[3]);      //earth
-                    composition[4] = new ItemStack(288,recipes.get(i)[4]);    //air
+        if(level != 0){
+            //Find the position of the block in the dispenser
+            //0  1  2
+            //3  4  5
+            //6  7  8
+            int item = -1;
+            for(int q =0; q<9; q++){
+                if(still.getInventory().getContents()[q] != null) item =q;
+            }
+            //If item <0, the dispenser is empty
+            if(item >= 0){
+            ItemStack[] composition = new ItemStack[5];
+                for(int i=0; i<levels[level]; i++){
+                        if(recipes.get(i)[5] == still.getInventory().getContents()[item].getTypeId()){
+                            AlchemyCraft.log.info("Found the object!");
+                            composition[0] = new ItemStack(348,recipes.get(i)[0]);    //aether
+                            composition[1] = new ItemStack(51,recipes.get(i)[1]);     //fire
+                            composition[2] = new ItemStack(8,recipes.get(i)[2]);      //water
+                            composition[3] = new ItemStack(3,recipes.get(i)[3]);      //earth
+                            composition[4] = new ItemStack(288,recipes.get(i)[4]);    //air
 
-                    //GIVE THEM STUFF!
-                    for(int k =0; k<composition.length; k++){
-                        if(composition[k].getAmount() == 0) continue;
-                        
-                        still.getInventory().clear();
-                        still.getInventory().addItem(composition[k]);
-                        for(int p = 0; p<composition[k].getAmount(); p++){
-                            AlchemyCraft.log.info("DISPENSING!");
-                            still.dispense();
+                            //GIVE THEM STUFF!
+                            for(int k =0; k<composition.length; k++){
+                                if(composition[k].getAmount() != 0){
+                                    still.getInventory().clear();
+                                    still.getInventory().addItem(composition[k]);
+                                    for(int p = 0; p<composition[k].getAmount(); p++){
+                                        AlchemyCraft.log.info("DISPENSING!");
+                                        still.dispense();
+                                    }
+                                }
+                            }
+                            //If the distillation was not an object at this level return -1
+                            if(i>levels[level-1]) return -1;
+                            //Other wise return the number (in the array) of that object
+                            //NOTE: this is offset to ignore all objects in lower levels
+                            else return (i-levels[level-1]);
                         }
-                    }
-                    //If the distillation was not an object at this level return -1
-                    if(i>levels[level-1]) return -1;
-                    //Other wise return the number (in the array) of that object
-                    //NOTE: this is offset to ignore all objects in lower levels
-                    else return (i-levels[level-1]);
+
                 }
-            
+            }
         }
         return -2;
+        
     }
 }

@@ -10,6 +10,7 @@ import org.bukkit.event.block.BlockListener;
 import org.bukkit.event.block.BlockPlaceEvent;
 
 /*TODO:
+ * [ ]Store still/furnace location
  * [ ]Clean up code
  */
 
@@ -17,8 +18,8 @@ public class acBlockListener extends BlockListener {
     private AlchemyCraft plugin;
     
     
-    boolean noCheating = true;
-    boolean lock = false;
+    boolean noCheating = true;   //Controls whether fire & water blocks can be placed
+    boolean lock = false;        //Locks out the dispensing logic to allow recursive calls
     
     public acBlockListener(AlchemyCraft plugin){
         this.plugin = plugin;
@@ -35,16 +36,17 @@ public class acBlockListener extends BlockListener {
                 
                 if(type.equals("furnace")){ 
                     plugin.furnaces.put(ev.getBlock().getLocation(),name);
-                    furnace = true;
                     ev.getPlayer().sendMessage(ChatColor.GOLD + "Furnace created!");
+                    furnace = true;
                 }
-                        
+                
                 else{ 
                     plugin.stills.put(ev.getBlock().getLocation(),name);
                     ev.getPlayer().sendMessage(ChatColor.GOLD + "Still created!");
                 }
                 
                 plugin.alchemicObject.remove(name);
+                plugin.StoreAlchemicObjects();
                 
                 //If the player is level 0, creating a still/furnace adds to their exp.
                 if(plugin.leveling.playerInfo.containsKey(name)){
@@ -52,9 +54,11 @@ public class acBlockListener extends BlockListener {
                     if(plugin.leveling.playerInfo.get(name)[0] == 0)
                         
                         
-                        plugin.leveling.addEXP(name, furnace?1:2);
-                        if(plugin.leveling.levelUP(name))
-                            ev.getPlayer().sendMessage(ChatColor.GREEN + "Leveled up to level 1!");
+//                          plugin.leveling.addEXP(name, furnace?1:2, "texp");
+//                          int lup = plugin.leveling.levelUP(name, "tlevel");
+//                          if(lup > 0){
+//                              ev.getPlayer().sendMessage(ChatColor.GREEN + "Level up! (1)");
+                          //}
                         return;
                 }
             }
@@ -68,26 +72,24 @@ public class acBlockListener extends BlockListener {
     
     @Override
     public void onBlockDispense(BlockDispenseEvent ev){
-        
-        
         if(!lock){
             Location loc = ev.getBlock().getLocation();
             int exp = -2;
             if(plugin.furnaces.containsKey(loc)){
                 lock = true;
-               
-                exp = plugin.recipes.Transmute(plugin.leveling.playerInfo.get(plugin.furnaces.get(loc))[0], (Dispenser)ev.getBlock().getState());
-                plugin.leveling.addEXP(plugin.furnaces.get(loc), exp);
-                   
+                exp = plugin.recipes.Transmute(plugin.furnaces.get(loc), (Dispenser)ev.getBlock().getState());
+                //plugin.leveling.addEXP(plugin.furnaces.get(loc), exp, "texp");
+                //plugin.leveling.levelUP(plugin.furnaces.get(loc), "tlevel");   
                 lock = false;
-                ev.setCancelled(true);
+                if(exp != -2) ev.setCancelled(true);
             }
             else if(plugin.stills.containsKey(loc)){
                 lock = true;
-                exp = plugin.recipes.Distill(plugin.leveling.playerInfo.get(plugin.stills.get(loc))[0], (Dispenser)ev.getBlock().getState());
-                plugin.leveling.addEXP(plugin.stills.get(loc), exp);
+                exp = plugin.recipes.Distill(plugin.stills.get(loc), (Dispenser)ev.getBlock().getState());
+                //plugin.leveling.addEXP(plugin.stills.get(loc), exp, "dexp");
+                //plugin.leveling.levelUP(plugin.stills.get(loc), "dlevel");
                 lock = false;
-                ev.setCancelled(true);
+                if(exp != -2) ev.setCancelled(true);
             }
         }
     }

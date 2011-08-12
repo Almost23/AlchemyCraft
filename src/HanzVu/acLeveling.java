@@ -1,12 +1,7 @@
 package HanzVu;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.HashMap;
-import java.util.Properties;
 import org.bukkit.entity.Player;
 
 public class acLeveling {
@@ -17,7 +12,8 @@ public class acLeveling {
      * [ ]Individual exp for Distilling/Transmuting
      *     [ ]Higher Transmuting ability unlocks new materials
      *     [ ]Higher Distilling ability gives greater yeild on distilled items
-     * [ ]Rewrite addEXP and levelUP code to use less preprocessing
+     * [x]Rewrite addEXP and levelUP code to use less preprocessing
+     * [ ]Rewrite Loading proc to be easier to follow
      */
     
     
@@ -26,192 +22,138 @@ public class acLeveling {
     public HashMap<String, int[]> playerInfo = new HashMap<String, int[]>();
     
     //A list of keys for the int[] in playerInfo (A workaround for a map of maps)
-    String[] dataStructure = {"level","exp"};
+    public String[] dataStructure = {"dlevel","dexp", "tlevel", "texp"};
     
     //Exp list necessary to level up
     //format:
-    //0x? | **<<24
+    //0x? | **<<16
     
     //? = bits marking recipes at this level that the user must find to level up
     //** = number of transmutations necessary to level up (resets to 0 every level)
     
     int[] EXP = {
-        0xF,                //level 0 -> level 1 
-        0xF | 10<<24,       //level 1 -> level 2
-        0x7 | 15<<24,       //level 2 -> level 3
-        0x7 | 20<<24,       //level 3 -> level 4
-        0x7 | 25<<24,       //level 4 -> level 5
-        0x7 | 30<<24        //level 5 -> level 6
+        0x3,                //level 0 -> level 1 
+        0xF | 10<<16,       //level 1 -> level 2
+        0x7 | 15<<16,       //level 2 -> level 3
+        0x7 | 20<<16,       //level 3 -> level 4
+        0x7 | 25<<16,       //level 4 -> level 5
+        0x7 | 30<<16        //level 5 -> level 6
     };
+    
+    //Bit masks for exp
+    int HI = 0xffff0000; //Number of transmutations
+    int LO = 0xffff;     //Found recipes
     
     public acLeveling(AlchemyCraft plugin){
         this.plugin = plugin;
     }
     
-    private File OpenFile(String file){
-        File pfile = new File(file);
-        if(!pfile.exists()){
-            pfile.getParentFile().mkdirs();
-           try{pfile.createNewFile();}            
-           catch(IOException e){return null;}            
-        }
-        return pfile;
-    }
-    
-    
-    private int[] ReadFromFile(File pfile){
-        int[] ret = {0,0};
-        FileInputStream in;
-            try {
-                in = new FileInputStream(pfile);
-            }
-                    
-            //This should never be called since we already checked to see if the file existed.
-            catch (FileNotFoundException ex) {
-                return ret;
-            }
-            Properties props = new Properties();
-            try {
-                props.load(in);
-                for(int i=0; i<dataStructure.length; i++)
-                 ret[i] = Integer.parseInt(props.getProperty(dataStructure[i], "-1"));
-                
-//                ret[0] = Integer.parseInt(props.getProperty(dataStructure[0], "-1"));
-//                ret[1] = Integer.parseInt(props.getProperty("exp", "0")); 
-            } catch (IOException ex) {
-               
-            }
-            catch(NumberFormatException ex){
-                 
-            }
-            
-            return ret;
-    }
-    
-    private void SaveToFile(File file, int[] data, String comments){
-        try{
-            Properties prop = new Properties();
-            FileOutputStream out = new FileOutputStream(file);
-            
-            
-            for(int i=0; i<dataStructure.length; i++)
-                prop.put(dataStructure[i], String.valueOf(data[i]));
-
-            prop.store(out, comments);
-        }
-                
-        catch(IOException ex)
-        {
-            
-        }
-        
-        
-    }
-    
-    private boolean CheckCorruption(int Exp){
-        int corrupt = 0;
-        
-        for(int i = 0; i<23; i++){
-            corrupt += (Exp>>i)&1;
-        }
-        
-        if((Exp >> 24) < corrupt)   
-        return true;
-        
-        return false;
-    }
-    
-        public void LoadLevelingInfo(Player player){
+    public void LoadLevelingInfo(Player player){
             String name = player.getName();
             
             //Opens the alchemy file for the player
-            File file = OpenFile("plugins\\Alchemy\\" + name + ".txt");
+            File file = plugin.fileio.OpenFile("plugins\\Alchemy\\" + name + ".txt");
             
             //Loads the player's data if their file exists
-            int[] data = {0,0};
-            if(file == null){
-                player.sendMessage("Could not create an Alchemy file for you.");
-                AlchemyCraft.log.info("Could not create an Alchemy file for " + name + ".");
+            if(file != null){
+                
+                String[] temp = plugin.fileio.ReadFromFile(file, dataStructure);
+                int data[] = new int[temp.length];
+                
+                for(int i =0; i<temp.length; i++){
+                    try{
+                        data[i] = Integer.parseInt(temp[i]);
+                    }
+                    catch(NumberFormatException ex){
+                        data[i] = -1;
+                    }
+                }
+                
+                //null data means the Alchemy file was empty.                
+                if(data[0] < 0){
+                    for(int i =0; i<dataStructure.length; i++)
+                        data[i] = 0;
+                    
+                    player.sendMessage("New Alchemy file created for you.");
+                    
+                    AlchemyCraft.log.info("New AlchemyCraft file for " + name + ".");
+                }
+
+                //Adds the player + info to the public hash map
+                playerInfo.put(name, data); 
+                
+                //Saves player's data to a file (poor placement)
+                StoreLevelingInfo(player, "New AlchemyCraftFile");
+                
                 return;
+
             }
             
-            data = ReadFromFile(file);
+            //Could not load/create an alchemy file.
+            player.sendMessage("Could not create an Alchemy file for you.");
             
-            //Makes sure the experience hasn't been corrupted by improper editing
-            //boolean corrupt = CheckCorruption(data[1]);
-            if(CheckCorruption(data[1])){
-                player.sendMessage("Your experience is corrupt and will be dropped to 0.");
-                AlchemyCraft.log.info("Corrupt exp for " + name + ".");
-                data[1] = 0;
-            }
+            AlchemyCraft.log.info("Could not create an Alchemy file for " + name + ".");
             
-            //Level -1 means the Alchemy file was empty.
-            if(data[0] == -1){
-                data[0] = 0;
-                data[1] = 0;
-                SaveToFile(file, data, "New AlchemyCraftFile");
-                player.sendMessage("New Alchemy file created for you.");
-                AlchemyCraft.log.info("New AlchemyCraft file for " + name + ".");
-            }
-            
-            //Adds the player + info to the public hash map
-            playerInfo.put(name, data);  
         }
         
-        public void StoreLevelingInfo(Player player){
+        public void StoreLevelingInfo(Player player, String comments){
             String name = player.getName();
             
             //Opens the alchemy file for the player
-            File file = OpenFile("plugins\\Alchemy\\" + name + ".txt");
+            File file = plugin.fileio.OpenFile("plugins\\Alchemy\\" + name + ".txt");
+            
+            //Create a string to hold the data to be stored
+            String[] temp = new String[playerInfo.get(player.getName()).length];
             
             //Checks to see if the player has an Alchemy file
-            if(file == null){
-                player.sendMessage("Could not create an Alchemy file for you.");
-                AlchemyCraft.log.info("Could not create an Alchemy file for " + name + ".");
-                return;
+            if(file != null){
+                
+                for(int i =0; i<playerInfo.get(player.getName()).length; i++){
+                    temp[i] = String.valueOf(playerInfo.get(player.getName())[i]);
+                }
+                
+                //Stores the users information
+                plugin.fileio.SaveToFile(file, temp, dataStructure, comments);
             }
-            
-            //Stores the users information
-            SaveToFile(file, playerInfo.get(name), "");
-            
+            else
+                AlchemyCraft.log.info("No Alchemy file to save to for " + name + ".");
             
        }
-            
-       
         
         
-        public boolean addEXP(String pname, int data){
-           if(data > 0){ 
-            if(playerInfo.containsKey(pname)){
-                playerInfo.get(pname)[1] |= (1<<data);
-            }
-           }
-           
-           if(data != -2){
-               playerInfo.get(pname)[1] |= (1<<24);
-               return true;
-           }
-           
-            return false;
-        }
-        
-        public boolean levelUP(String pname){
-            if(playerInfo.containsKey(pname)){
-                int level = playerInfo.get(pname)[0];
-                int exp = playerInfo.get(pname)[1];
-            
-               if((exp & 0xf) == (EXP[level] & 0xf)
-                &&(exp & (0xFF << 24)) >= (EXP[level] & (0xFF << 24))     
-                       ){
-                   
-                   playerInfo.get(pname)[0]++;
-                   playerInfo.get(pname)[1] =0;
-                   return true;
-               }
-                
+        public boolean addEXP(String pname, int data, String EXPTYPE){
+            if(data == -1) data =0; //-1 = Distillation/Transmutation adds to number performed, but didn't find a new recipe
+            if(data >= 0 ){ //-2 means Distillation/Transmutation didn't occur
+                if(playerInfo.containsKey(pname)){
+                    for(int i=0; i<dataStructure.length; i++){
+                        if(dataStructure[i].equals(EXPTYPE)){
+                            playerInfo.get(pname)[i] |= 1<<data; //Marks the recipe as found
+                            playerInfo.get(pname)[i] += 1<<16;   //Adds 1 to the number of distills/transmutations
+                            return true;
+                        }
+                    }
+                }
             }
             return false;
         }
+        
+        public int levelUP(String pname, String LUPTYPE){
+            if(playerInfo.containsKey(pname)){
+                for(int i=0; i<dataStructure.length; i++){
+                    if(dataStructure[i].equals(LUPTYPE)){
+                        if((playerInfo.get(pname)[i+1] & (EXP[playerInfo.get(pname)[i+1]] & LO)) == (EXP[playerInfo.get(pname)[i+1]] & LO) &&
+                           (playerInfo.get(pname)[i+1] & HI) >= (EXP[playerInfo.get(pname)[i+1]] & HI))
+                            if(playerInfo.get(pname)[i] == 0){
+                                playerInfo.get(pname)[i-2]++; //If level is 0 force level up of both distilling and transmuting
+                            }
+                            return playerInfo.get(pname)[i]++;
+                               
+                    }
+                }
+            }
+            return 0;
+        }
+    
         
         
 }
