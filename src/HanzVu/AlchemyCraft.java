@@ -68,7 +68,7 @@ public class AlchemyCraft extends JavaPlugin{
     
     @Override
     public void onDisable(){
-        
+        StoreAlchemicObjects();
     }
     
     @Override
@@ -101,6 +101,8 @@ public class AlchemyCraft extends JavaPlugin{
     public void ReadAlchemicObjects(){
         File f = fileio.OpenFile("plugins\\Alchemy\\objects.txt");
         if(f != null){
+            //the Reading function takes a String[] and returns a String[]
+            //I want to send a String and return an int. This is my little work around
             String[] string = new String[1];
             string[0] = "number";
             String[] num = fileio.ReadFromFile(f, string);
@@ -110,9 +112,14 @@ public class AlchemyCraft extends JavaPlugin{
                 log.info("Could not load alchemic objects!");
                 return;
             }
+            //number = number of objects in the file
             
+            //Each object has 5 parts:
+            //t = type (furnace or still)
+            //p = player (owner
+            //x,y,z = location
             String[] Keys = new String[number*5];
-            for(int i = 0; i<number; i+=5){
+            for(int i = 0; i<(number*5); i+=5){
                 Keys[i] = String.valueOf(i/5) + "t";
                 Keys[i+1] = String.valueOf(i/5) + "p";
                 Keys[i+2] = String.valueOf(i/5) + "x";
@@ -123,14 +130,15 @@ public class AlchemyCraft extends JavaPlugin{
             }
             
             String[] data = fileio.ReadFromFile(f, Keys);
-            for(int i=0; i<number; i+=5){
+            for(int i=0; i<(number*5); i+=5){
                 int x,y,z = 0;
                     try{
                         x = Integer.parseInt(data[i+2]);
                         y = Integer.parseInt(data[i+3]);
                         z = Integer.parseInt(data[i+4]);
                     }
-                    catch(NumberFormatException ex){
+                    
+                    catch(NumberFormatException ex){ 
                         continue;
                     }
                     
@@ -150,7 +158,8 @@ public class AlchemyCraft extends JavaPlugin{
             String[] Keys = new String[(stills.size() + furnaces.size())*5 +1];
             String[] Data = new String[Keys.length];
             
-            
+            //Makes a list of keys for each object.
+            //Each object has 5 parts as described in the loading func above 
             for(int i =0; i<Keys.length-1; i+=5){
                 Keys[i] = String.valueOf(i/5) + "t";
                 Keys[i+1] = String.valueOf(i/5) + "p";
@@ -158,6 +167,7 @@ public class AlchemyCraft extends JavaPlugin{
                 Keys[i+3] = String.valueOf(i/5) + "y";
                 Keys[i+4] = String.valueOf(i/5) + "z";
             }
+            
             
             int i =0;
             Set<Location> locs = stills.keySet();
@@ -184,6 +194,7 @@ public class AlchemyCraft extends JavaPlugin{
                 i+=5;
             }
         
+            //The last key/data is the number of objects that are being stored (so the loading procedure knows how much to load)
             Keys[Keys.length -1] = "number";
             Data[Keys.length -1] = String.valueOf((Keys.length -1)/5);
             fileio.SaveToFile(f, Data, Keys, "Saving Alchemic Objects");
